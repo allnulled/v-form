@@ -1,0 +1,15 @@
+{
+  "name": "v-form",
+  "version": "1.0.0",
+  "description": "Form management as directive for vue@2.",
+  "main": "v-form.js",
+  "scripts": {
+    "test": "echo 'no test from node.js for @allnulled/v-form'",
+    "build": "echo 'no building from node.js for @allnulled/v-form'",
+    "versionate": "echo 'no versionate from node.js for @allnulled/v-form'",
+    "test-browser": "npm run build && npx http-server -c-1 docs -o index.html"
+  },
+  "keywords": [],
+  "author": "allnulled",
+  "license": "WTFPL"
+}
