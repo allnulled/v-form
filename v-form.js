@@ -11,7 +11,7 @@
       return false;
     }
     if (id in scope) {
-      // @EXPERIMENTAL: volver a quitar el comentario si es muy loco.
+      // !@EXPERIMENTAL: volver a quitar el comentario si es muy loco.
       // throw new Error(`Cannot repeat id «${id}» in scope on «registerIdInScope»`);
     }
     scope[id] = element;
@@ -35,8 +35,8 @@
     const canHaveChildren = isForm || isControl;
     if (canHaveChildren) {
       return function () {
-        console.log("[trace][v-form] generateFormObject.getChildren");
-        // @TODO: encontrar nodos hijo en el scope pertinente
+        console.log(`[trace][v-form] getChildren (from ${objectType})`);
+        // !@TODO: encontrar nodos hijo en el scope pertinente
         const id = el.$lswFormMetadata.parameters.selfId;
         const scope = el.$lswFormMetadata.parameters.selfScope;
         const scopeIds = Object.keys(scope);
@@ -55,10 +55,14 @@
             throw new Error(`Failed «expectedChildren» on «{${Object.keys(el.$lswFormMetadata.parameters.selfScope).join(", ")}}.${el.$lswFormMetadata.parameters.selfId}»: current=${children.length} / expected=${expectation1}`);
           }
         }
+        const elementTag = el.tagName;
+        const elementClasses = el.className.split(" ").join(".");
+        const vFormType = el.$lswFormMetadata.type;
+        console.log(`[trace][v-form] Found ${children.length} children on «${elementTag.toLowerCase()}${elementClasses ? '.' + elementClasses : ''} v-form.${vFormType}»`);
         return children;
       };
     } else {
-      throw new Error("Required parameter «objectType» to be a valid option (form, control, input, error) on v-form directive");
+      throw new Error(`Required parameter «objectType» to be a valid option (form, control, input, error) on «v-form.${el.$lswFormMetadata.type}» directive`);
     }
   };
   const generateGetValueFunction = function (el, binding, objectType = "form") {
@@ -77,33 +81,80 @@
     }
     if (objectType === "form") {
       return function () {
-        console.log("[trace][v-form] generateFormObject.getValue");
+        console.log("[trace][v-form] getValue (from form)");
         const allChildren = this.getChildren();
         const finalValue = {};
+        Iterating_children_of_form_to_get_values:
         for (let index = 0; index < allChildren.length; index++) {
           const child = allChildren[index];
+          if(child.$lswFormMetadata.type === "error") {
+            continue Iterating_children_of_form_to_get_values;
+          }
           const value = child.$lswFormMetadata.methods.getValue();
           const prop = child.$lswFormMetadata.parameters.name;
+          if(typeof prop !== "string") {
+            // !@EASYERROR!
+            // All v-form.FORM nodes must have a «name». 
+            // This error is extensively documented and debugged
+            // because it is easy to be committed.
+            const directiveType = child.$lswFormMetadata.type;
+            const directiveElement = child.tagName;
+            console.error(`[!] Error fetching «name» property on «v-form.form» child. All «v-form.*» nodes that are children of «v-form.form» must have a «name» property on «vForm.getValue». Details provided below:`);
+            console.log("Directive tag:", el.tagName);
+            console.log("Directive element:", el);
+            console.log("Directive type:", el.$lswFormMetadata.type);
+            console.log("Directive expression:", el.$lswFormMetadata.expression);
+            console.log("Child tag:", child.tagName);
+            console.log("Child element:", child);
+            console.log("Child type:", child.$lswFormMetadata.type);
+            console.log("Child expression:", child.$lswFormMetadata.expression);
+            throw new Error(`Required child «v-form.${directiveType}» on element «${directiveElement}» to have property «name» as string on «getValue»`);
+          }
           finalValue[prop] = value;
         }
         return applyFormat(finalValue);
       };
     } else if (objectType === "control") {
       return function () {
-        console.log("[trace][v-form] generateControlObject.getValue");
+        console.log("[trace][v-form] getValue (from control)");
         const allChildren = this.getChildren();
-        const finalValue = {};
+        let finalValue = {};
+        Iterating_children_of_control_to_get_values:
         for (let index = 0; index < allChildren.length; index++) {
           const child = allChildren[index];
           const value = child.$lswFormMetadata.methods.getValue();
           const prop = child.$lswFormMetadata.parameters.name;
-          finalValue[prop] = value;
+          if(prop === null) {
+            // !@CAUTION!
+            // Passing explicitly a null on «name» means to override the whole CONTROL value:
+            finalValue = value;
+          } else if(typeof prop !== "string") {
+            // !@EASYERROR!
+            // All v-form.CONTROL nodes must have a «name» or be null.
+            // This error is extensively documented and debugged
+            // because it is easy to be committed.
+            const directiveType = child.$lswFormMetadata.type;
+            const directiveElement = child.tagName;
+            console.error(`[!] Error fetching «name» property on «v-form.form» child. All «v-form.*» nodes that are children of «v-form.form» must have a «name» property on «vForm.getValue». Details provided below:`);
+            console.log("Directive tag:", el.tagName);
+            console.log("Directive element:", el);
+            console.log("Directive type:", el.$lswFormMetadata.type);
+            console.log("Directive expression:", el.$lswFormMetadata.expression);
+            console.log("Child tag:", child.tagName);
+            console.log("Child element:", child);
+            console.log("Child type:", child.$lswFormMetadata.type);
+            console.log("Child expression:", child.$lswFormMetadata.expression);
+            throw new Error(`Required child «v-form.${directiveType}» on element «${directiveElement}» to have property «name» as string on «getValue»`);
+          } else {
+            // !@NORMALLY:
+            finalValue[prop] = value;
+          }
         }
         return applyFormat(finalValue);
       };
     } else if (objectType === "input") {
       return function () {
-        console.log("[trace][v-form] generateInputObject.getValue");
+        console.log("[trace][v-form] getValue (from input)");
         const tagName = el.tagName.toLowerCase();
         const valuedTags = ["input", "textarea", "select"];
         if (valuedTags.indexOf(tagName) !== -1) {
@@ -112,7 +163,7 @@
         return applyFormat(el.textContent);
       };
     } else {
-      throw new Error("Required parameter «objectType» to be a valid option (form, control, input, error) on v-form directive");
+      throw new Error(`Required parameter «objectType» to be a valid option (form, control, input, error) on v-form directive`);
     }
   };
   const generateSubmitFunction = function (el, binding) {
@@ -136,9 +187,13 @@
       console.log(`[trace][v-form] generate${capitalize(objectType)}Object.commonValidate`);
       const children = this.getChildren();
       const arisedErrors = [];
+      Iterating_subscribed_children:
       for (let index = 0; index < children.length; index++) {
         const child = children[index];
         try {
+          if (child.$lswFormMetadata.type === "error") {
+            break Iterating_subscribed_children;
+          }
           await child.$lswFormMetadata.methods.validate();
         } catch (error) {
           arisedErrors.push(error);
@@ -180,7 +235,7 @@
         }
       };
     } else {
-      throw new Error("Required parameter «objectType» to be a valid option (form, control, input, error) on v-form directive");
+      throw new Error(`Required parameter «objectType» to be a valid option (form, control, input, error) on v-form directive`);
     }
   };
   const generatePropagateErrorFunction = function (el, binding, objectType = "form") {
@@ -200,9 +255,10 @@
           console.log(`[error][v-form] This error will be ignored in order to continue fluently the tree-up error propagation as expected.`);
         }
         const parentElement = parentScope[parentId];
-        const isFormType = selfScopeElement.$lswFormMetadata.type === "form";
-        const isControlType = selfScopeElement.$lswFormMetadata.type === "control";
-        const shouldPropagateUp = isFormType || isControlType;
+        const isFormType = parentElement.$lswFormMetadata.type === "form";
+        const isControlType = parentElement.$lswFormMetadata.type === "control";
+        const isInputType = parentElement.$lswFormMetadata.type === "input";
+        const shouldPropagateUp = (isFormType || isControlType) && !isInputType;
         if (shouldPropagateUp) {
           parentElement.$lswFormMetadata.methods.propagateError(error);
         }
@@ -328,171 +384,243 @@
   };
   const loadMetadataAsForm = function (el, binding) {
     console.log("[trace][v-form] loadMetadataAsForm");
-    el.$lswFormMetadata = {
-      type: "form",
-      component: binding.instance,
-      expression: binding.expression,
-      parameters: binding.value,
-      element: el,
-    };
-    const params = binding.value;
-    Validate_parameters: {
-      const { parentId } = params;
-      const { parentScope } = params;
-      const { selfId } = params;
-      const { selfScope } = params;
-      const { onValidate } = params;
-      const { onValidated } = params;
-      const { onSubmit } = params;
-      if (typeof parentId === "undefined") {
-        // @OK. Because form can have no parent.
-      } else if (typeof parentId !== "string") {
-        throw new Error("Required parameter «parentId» to be a string on v-form directive");
+    try {
+      el.$lswFormMetadata = {
+        type: "form",
+        component: binding.instance,
+        expression: binding.expression,
+        parameters: binding.value,
+        element: el,
+      };
+      const params = binding.value;
+      Validate_parameters: {
+        const { parentId } = params;
+        const { parentScope } = params;
+        const { selfId } = params;
+        const { selfScope } = params;
+        const { onValidate } = params;
+        const { onValidated } = params;
+        const { onSubmit } = params;
+        if (typeof parentId === "undefined") {
+          // !@OK. Because form can have no parent.
+        } else if (typeof parentId !== "string") {
+          throw new Error(`Required parameter «parentId» to be a string on «v-form.form» directive on «loadMetadataAsForm»`);
+        }
+        if (typeof parentScope === "undefined") {
+          // !@OK. Because form can have no parent.
+        } else if (typeof parentScope !== "object") {
+          throw new Error(`Required parameter «parentScope» to be an object on «v-form.form» directive on «loadMetadataAsForm»`);
+        }
+        if (typeof selfId !== "string") {
+          throw new Error(`Required parameter «selfId» to be a string on «v-form.form» directive on «loadMetadataAsForm»`);
+        }
+        if (typeof selfScope !== "object") {
+          throw new Error(`Required parameter «selfScope» to be an object on «v-form.form» directive on «loadMetadataAsForm»`);
+        }
+        if (typeof onValidate === "undefined") {
+          // !@OK.
+        } else if (typeof onValidate !== "function") {
+          throw new Error(`Required parameter «onValidate» to be a function on «v-form.form» directive on «loadMetadataAsForm»`);
+        }
+        if (typeof onSubmit === "undefined") {
+          // !@OK.
+        } else if (typeof onSubmit !== "function") {
+          throw new Error(`Required parameter «onSubmit» to be an function on «v-form.form» directive on «loadMetadataAsForm»`);
+        }
       }
-      if (typeof parentScope === "undefined") {
-        // @OK. Because form can have no parent.
-      } else if (typeof parentScope !== "object") {
-        throw new Error("Required parameter «parentScope» to be an object on v-form directive");
+      Inject_scopes: {
+        const finalSelfId = params.selfId || null;
+        const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
+        const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
+        if (!selfScopedOk) {
+          // !@ERROR. Because forms requires children.
+          throw new Error(`Required «v-form.form» directive to be able to register «selfId» in «selfScope» on «loadMetadataAsForm»`);
+        }
+        if (!parentScopedOk) {
+          // !@OK. Because form does not need a parent.
+        }
       }
-      if (typeof selfId !== "string") {
-        throw new Error("Required parameter «selfId» to be a string on v-form directive");
+      Inject_api: {
+        el.$lswFormMetadata.methods = generateFormObject(el, binding);
       }
-      if (typeof selfScope !== "object") {
-        throw new Error("Required parameter «selfScope» to be an object on v-form directive");
-      }
-      if (typeof onValidate === "undefined") {
-        // @OK.
-      } else if (typeof onValidate !== "function") {
-        throw new Error("Required parameter «onValidate» to be a function on v-form directive");
-      }
-      if (typeof onSubmit === "undefined") {
-        // @OK.
-      } else if (typeof onSubmit !== "function") {
-        throw new Error("Required parameter «onSubmit» to be an function on v-form directive");
-      }
-    }
-    Inject_scopes: {
-      const finalSelfId = params.selfId || null;
-      const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
-      const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
-      if (!selfScopedOk) {
-        // @ERROR. Because forms requires children.
-        throw new Error("Required v-form.form directive to be able to register «selfId» in «selfScope»");
-      }
-      if (!parentScopedOk) {
-        // @OK. Because form does not need a parent.
-      }
-    }
-    Inject_api: {
-      el.$lswFormMetadata.methods = generateFormObject(el, binding);
+    } catch (error) {
+      console.log("[!] Error fetching «name» property on  Error loading v-form.form:", binding);
+      throw error;
     }
   };
   const loadMetadataAsControl = function (el, binding) {
     console.log("[trace][v-form] loadMetadataAsControl");
-    el.$lswFormMetadata = {
-      type: "control",
-      component: binding.instance,
-      expression: binding.expression,
-      parameters: binding.value,
-      element: el,
-    };
-    const params = binding.value;
-    Validate_parameters: {
-      const { parentId } = params;
-      const { parentScope } = params;
-      const { selfId } = params;
-      const { selfScope } = params;
-      const { onValidate } = params;
-      const { onValidated } = params;
-      const { onSubmit } = params;
-    }
-    Inject_scopes: {
-      const finalSelfId = params.selfId || "control." + getRandomString(10);
-      const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
-      const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
-      if (!selfScopedOk) {
-        // @OK. Because control does not need a children.
+    try {
+      el.$lswFormMetadata = {
+        type: "control",
+        component: binding.instance,
+        expression: binding.expression,
+        parameters: binding.value,
+        element: el,
+      };
+      const params = binding.value;
+      Validate_parameters: {
+        const { parentId } = params;
+        const { parentScope } = params;
+        const { selfId } = params;
+        const { selfScope } = params;
+        const { name } = params;
+        const { onValidate } = params;
+        const { onValidated } = params;
+        const { onSubmit } = params;
+        if (typeof parentScope !== "object") {
+          throw new Error(`Required «v-form.control» to have always an object as «parentScope» parameter on «loadMetadataAsControl»`);
+        }
+        if (typeof parentId !== "string") {
+          throw new Error(`Required «v-form.control» to have always a string as «parentId» on «loadMetadataAsControl»`);
+        }
+        if (typeof selfScope !== "object") {
+          throw new Error(`Required «v-form.control» to have always an object as «selfScope» parameter on «loadMetadataAsControl»`);
+        }
+        if (typeof selfId !== "string") {
+          throw new Error(`Required «v-form.control» to have always a string as «selfId» parameter on «loadMetadataAsControl»`);
+        }
+        if (typeof name !== "string") {
+          if(name !== null) {
+            throw new Error(`Required «v-form.control» to have always a string [or at least «null» to override the value not only a property] as «name» parameter on «loadMetadataAsControl»`);
+          }
+        }
+        if ((typeof onValidate !== "undefined") && (typeof onValidate !== "function")) {
+          throw new Error(`Required «v-form.control» to have always a function or undefined as «onValidate» parameter on «loadMetadataAsControl»`);
+        }
+        if ((typeof onSubmit !== "undefined") && (typeof onSubmit !== "function")) {
+          throw new Error(`Required «v-form.control» to have always a function or undefined as «onSubmit» parameter on «loadMetadataAsControl»`);
+        }
+        if ((typeof onValidated !== "undefined") && (typeof onValidated !== "function")) {
+          throw new Error(`Required «v-form.control» to have always a function or undefined as «onValidated» parameter on «loadMetadataAsControl»`);
+        }
       }
-      if (!parentScopedOk) {
-        // @OK. Because control does not need a parent.
+      Inject_scopes: {
+        const finalSelfId = params.selfId || "control." + getRandomString(10);
+        const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
+        const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
+        if (!selfScopedOk) {
+          // !@OK. Because control does not need a children.
+        }
+        if (!parentScopedOk) {
+          throw new Error(`Required «v-form.control» directive to be able to register «selfId» in «parentScope» on «loadMetadataAsForm»`);
+        }
+        if ((!selfScopedOk) && (!parentScopedOk)) {
+          throw new Error(`Required «v-form.control» directive to register «parentId» or «selfId» but not none on «loadMetadataAsControl»`);
+        }
       }
-      if ((!selfScopedOk) && (!parentScopedOk)) {
-        throw new Error("Required v-form.control directive to register «parentId» or «selfId» but not none");
+      Inject_api: {
+        el.$lswFormMetadata.methods = generateControlObject(el, binding);
       }
-    }
-    Inject_api: {
-      el.$lswFormMetadata.methods = generateControlObject(el, binding);
+    } catch (error) {
+      console.log("[!] Error fetching «name» property on  Error loading v-form.control:", binding);
+      throw error;
     }
   };
   const loadMetadataAsInput = function (el, binding) {
     console.log("[trace][v-form] loadMetadataAsInput");
-    el.$lswFormMetadata = {
-      type: "input",
-      component: binding.instance,
-      expression: binding.expression,
-      parameters: binding.value,
-      element: el,
-    };
-    const params = binding.value;
-    Validate_parameters: {
-      const { parentId } = params;
-      const { parentScope } = params;
-      const { selfId } = params;
-      const { selfScope } = params;
-      const { onValidate } = params;
-      const { onValidated } = params;
-      const { onSubmit } = params;
-    }
-    Inject_scopes: {
-      const finalSelfId = params.selfId || "input." + getRandomString(10);
-      const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
-      const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
-      if (!selfScopedOk) {
-        // @OK. Because input cannot have a children.
+    try {
+      el.$lswFormMetadata = {
+        type: "input",
+        component: binding.instance,
+        expression: binding.expression,
+        parameters: binding.value,
+        element: el,
+      };
+      const params = binding.value;
+      Validate_parameters: {
+        const { parentId } = params;
+        const { parentScope } = params;
+        const { selfId } = params;
+        const { selfScope } = params;
+        const { name } = params;
+        const { onValidate } = params;
+        const { onValidated } = params;
+        const { onSubmit } = params;
+        if (typeof parentScope !== "object") {
+          throw new Error(`Required «v-form.input» to have always an object as «parentScope» parameter on «loadMetadataAsInput»`);
+        }
+        if (typeof parentId !== "string") {
+          throw new Error(`Required «v-form.input» to have always a string as «parentId» on «loadMetadataAsInput»`);
+        }
+        if (typeof selfScope !== "object") {
+          // !@OK: input does not need children
+        }
+        if (typeof selfId !== "string") {
+          // !@OK: input does not need children
+        }
+        if (typeof name !== "string") {
+          throw new Error(`Required «v-form.input» to have always a string as «name» parameter on «loadMetadataAsInput»`);
+        }
+        if ((typeof onValidate !== "undefined") && (typeof onValidate !== "function")) {
+          throw new Error(`Required «v-form.input» to have always a function or undefined as «onValidate» parameter on «loadMetadataAsInput»`);
+        }
+        if ((typeof onSubmit !== "undefined") && (typeof onSubmit !== "function")) {
+          throw new Error(`Required «v-form.input» to have always a function or undefined as «onSubmit» parameter on «loadMetadataAsInput»`);
+        }
+        if ((typeof onValidated !== "undefined") && (typeof onValidated !== "function")) {
+          throw new Error(`Required «v-form.input» to have always a function or undefined as «onValidated» parameter on «loadMetadataAsInput»`);
+        }
       }
-      if (!parentScopedOk) {
-        // @ERROR. Because input requires parent.
-        throw new Error("Required v-form.input directive to be able to register «selfId» in «parentScope»");
+      Inject_scopes: {
+        const finalSelfId = params.selfId || "input." + getRandomString(10);
+        const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
+        const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
+        if (!selfScopedOk) {
+          // !@OK. Because input cannot have a children.
+        }
+        if (!parentScopedOk) {
+          // !@ERROR. Because input requires parent.
+          throw new Error(`Required «v-form.input» directive to be able to register «selfId» in «parentScope»`);
+        }
       }
-    }
-    Inject_api: {
-      el.$lswFormMetadata.methods = generateInputObject(el, binding);
+      Inject_api: {
+        el.$lswFormMetadata.methods = generateInputObject(el, binding);
+      }
+    } catch (error) {
+      console.log("[!] Error fetching «name» property on  Error loading v-form.input:", binding);
+      throw error;
     }
   };
   const loadMetadataAsError = function (el, binding) {
     console.log("[trace][v-form] loadMetadataAsError");
-    el.$lswFormMetadata = {
-      type: "error",
-      component: binding.instance,
-      expression: binding.expression,
-      parameters: binding.value,
-      element: el,
-    };
-    const params = binding.value;
-    Validate_parameters: {
-      const { parentId } = params;
-      const { parentScope } = params;
-      const { selfId } = params;
-      const { selfScope } = params;
-      const { onValidate } = params;
-      const { onValidated } = params;
-      const { onSuccessStatus } = params;
-      const { onSubmit } = params;
-    }
-    Inject_scopes: {
-      const finalSelfId = params.selfId || "error." + getRandomString(10);
-      const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
-      const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
-      if (!selfScopedOk) {
-        // @OK. Because form does not need a children.
+    try {
+      el.$lswFormMetadata = {
+        type: "error",
+        component: binding.instance,
+        expression: binding.expression,
+        parameters: binding.value,
+        element: el,
+      };
+      const params = binding.value;
+      Validate_parameters: {
+        const { parentId } = params;
+        const { parentScope } = params;
+        const { selfId } = params;
+        const { selfScope } = params;
+        const { onValidate } = params;
+        const { onValidated } = params;
+        const { onSuccessStatus } = params;
+        const { onSubmit } = params;
       }
-      if (!parentScopedOk) {
-        // @ERROR. Because error requires parent.
-        throw new Error("Required v-form.error directive to be able to register «selfId» in «parentScope»");
+      Inject_scopes: {
+        const finalSelfId = params.selfId || "error." + getRandomString(10);
+        const selfScopedOk = registerIdInScope(finalSelfId, params.selfScope, el);
+        const parentScopedOk = registerIdInScope(finalSelfId, params.parentScope, el);
+        if (!selfScopedOk) {
+          // !@OK. Because error does not need a children.
+        }
+        if (!parentScopedOk) {
+          // !@ERROR. Because error requires parent.
+          throw new Error(`Required «v-form.error» directive to be able to register «selfId» in «parentScope»`);
+        }
       }
-    }
-    Inject_api: {
-      el.$lswFormMetadata.methods = generateErrorObject(el, binding);
+      Inject_api: {
+        el.$lswFormMetadata.methods = generateErrorObject(el, binding);
+      }
+    } catch (error) {
+      console.log("[!] Error fetching «name» property on  Error loading v-form.error:", binding);
+      throw error;
     }
   };
   const loadForm = function (el, binding) {
@@ -514,43 +642,60 @@
   const knownScopes = [];
   Vue.directive("form", {
     bind(el, binding) {
-      const { modifiers } = binding;
-      const isForm = "form" in modifiers;
-      const isControl = "control" in modifiers;
-      const isError = "error" in modifiers;
-      const isInput = "input" in modifiers;
-      if (isForm) {
-        loadForm(el, binding);
-        el.setAttribute("data-v-form-type", "form");
-      } else if (isControl) {
-        loadControl(el, binding);
-        el.setAttribute("data-v-form-type", "control");
-      } else if (isError) {
-        loadError(el, binding);
-        el.setAttribute("data-v-form-type", "error");
-      } else if (isInput) {
-        loadInput(el, binding);
-        el.setAttribute("data-v-form-type", "input");
-      } else {
-        throw new Error("Required v-form directive to have 1 modifier: .form .control .input or .error");
-      }
-      Extend_element_for_debug_purposes: {
-        el.setAttribute("data-v-form-parent-id", el.$lswFormMetadata.parameters.parentId);
-        el.setAttribute("data-v-form-self-id", el.$lswFormMetadata.parameters.selfId);
-        const posParentBrute = knownScopes.indexOf(el.$lswFormMetadata.parameters.parentScope);
-        const posSelfBrute = knownScopes.indexOf(el.$lswFormMetadata.parameters.selfScope);
-        let posParent = posParentBrute;
-        let posSelf = posSelfBrute;
-        if (posParent === -1) {
-          knownScopes.push(el.$lswFormMetadata.parameters.parentScope);
-          posParent = knownScopes.length - 1;
+      console.log("[trace][v-form] bind");
+      let modifierAlias = Object.keys(binding.modifiers).join("|");
+      try {
+        const { modifiers } = binding;
+        const isForm = "form" in modifiers;
+        const isControl = "control" in modifiers;
+        const isError = "error" in modifiers;
+        const isInput = "input" in modifiers;
+        modifierAlias = isForm ? "form" : isControl ? "control" : isError ? "error" : isInput ? "input" : "-";
+        if (typeof binding.value !== "object") {
+          console.error(`You are passing a «${typeof binding.value}» type in some «v-form.${modifierAlias}» directive on an element of type «${el.tagName}». Details are provided below:`);
+          console.log(el);
+          console.log(binding);
+          console.error("Good luck. I believe in you.");
+          throw new Error(`Required «v-form» directive to receive an object as parameter on «v-form.${modifierAlias}»`);
         }
-        if (posSelf === -1) {
-          knownScopes.push(el.$lswFormMetadata.parameters.selfScope);
-          posSelf = knownScopes.length - 1;
+        if (isForm) {
+          loadForm(el, binding);
+          el.setAttribute("data-v-form-type", "form");
+        } else if (isControl) {
+          loadControl(el, binding);
+          el.setAttribute("data-v-form-type", "control");
+        } else if (isError) {
+          loadError(el, binding);
+          el.setAttribute("data-v-form-type", "error");
+        } else if (isInput) {
+          loadInput(el, binding);
+          el.setAttribute("data-v-form-type", "input");
+        } else {
+          throw new Error(`Required v-form directive to have 1 modifier: .form .control .input or .error`);
         }
-        el.setAttribute("data-v-form-parent-scope", "{S." + posParent + "}");
-        el.setAttribute("data-v-form-self-scope", "{S." + posSelf + "}");
+        Extend_element_for_debug_purposes: {
+          el.setAttribute("data-v-form-parent-id", el.$lswFormMetadata.parameters.parentId);
+          el.setAttribute("data-v-form-self-id", el.$lswFormMetadata.parameters.selfId);
+          const posParentBrute = knownScopes.indexOf(el.$lswFormMetadata.parameters.parentScope);
+          const posSelfBrute = knownScopes.indexOf(el.$lswFormMetadata.parameters.selfScope);
+          let posParent = posParentBrute;
+          let posSelf = posSelfBrute;
+          if (posParent === -1) {
+            knownScopes.push(el.$lswFormMetadata.parameters.parentScope);
+            posParent = knownScopes.length - 1;
+          }
+          if (posSelf === -1) {
+            knownScopes.push(el.$lswFormMetadata.parameters.selfScope);
+            posSelf = knownScopes.length - 1;
+          }
+          el.setAttribute("data-v-form-parent-scope", "{" + posParent + "}");
+          el.setAttribute("data-v-form-self-scope", "{" + posSelf + "}");
+        }
+      } catch (error) {
+        console.error(`[!] Error fetching «name» property on  Error binding «v-form.${modifierAlias}». Details provided below:`);
+        console.log(el, binding);
+        console.error(error);
+        throw error;
       }
     },
     unbind(el) {
